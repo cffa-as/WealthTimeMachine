@@ -1,0 +1,330 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  /* Updated to teal/turquoise and coral color scheme inspired by reference design */
+  --background: oklch(0.97 0.01 60);
+  --foreground: oklch(0.2 0.02 240);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.2 0.02 240);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.2 0.02 240);
+  --primary: oklch(0.6 0.15 190);
+  --primary-foreground: oklch(0.98 0.01 190);
+  --secondary: oklch(0.95 0.02 190);
+  --secondary-foreground: oklch(0.2 0.02 240);
+  --muted: oklch(0.96 0.01 190);
+  --muted-foreground: oklch(0.5 0.02 240);
+  --accent: oklch(0.7 0.15 40);
+  --accent-foreground: oklch(0.98 0.01 40);
+  --destructive: oklch(0.577 0.245 27.325);
+  --destructive-foreground: oklch(0.99 0.01 85);
+  --border: oklch(0.92 0.01 190);
+  --input: oklch(0.96 0.01 190);
+  --ring: oklch(0.6 0.15 190);
+  --chart-1: oklch(0.6 0.15 190);
+  --chart-2: oklch(0.7 0.15 40);
+  --chart-3: oklch(0.65 0.2 150);
+  --chart-4: oklch(0.55 0.18 220);
+  --chart-5: oklch(0.75 0.12 30);
+  --radius: 1.25rem;
+}
+
+.dark {
+  --background: oklch(0.15 0.02 240);
+  --foreground: oklch(0.95 0.01 190);
+  --card: oklch(0.18 0.02 240);
+  --card-foreground: oklch(0.95 0.01 190);
+  --popover: oklch(0.18 0.02 240);
+  --popover-foreground: oklch(0.95 0.01 190);
+  --primary: oklch(0.65 0.15 190);
+  --primary-foreground: oklch(0.15 0.02 240);
+  --secondary: oklch(0.25 0.02 240);
+  --secondary-foreground: oklch(0.95 0.01 190);
+  --muted: oklch(0.25 0.02 240);
+  --muted-foreground: oklch(0.6 0.02 190);
+  --accent: oklch(0.75 0.15 40);
+  --accent-foreground: oklch(0.15 0.02 240);
+  --destructive: oklch(0.6 0.2 27);
+  --destructive-foreground: oklch(0.95 0.01 85);
+  --border: oklch(0.25 0.02 240);
+  --input: oklch(0.25 0.02 240);
+  --ring: oklch(0.65 0.15 190);
+}
+
+@theme inline {
+  --font-sans: "Geist", "Geist Fallback";
+  --font-mono: "Geist Mono", "Geist Mono Fallback";
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+
+  /* Mobile-specific enhancements for better UX */
+  html {
+    scroll-behavior: smooth;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Better touch interactions on mobile */
+  button,
+  a,
+  [role="button"] {
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+
+  /* Smooth scrolling for horizontal scroll areas */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Safe area padding for mobile devices with notches */
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  /* Prevent text size adjustment on mobile */
+  @media screen and (max-width: 768px) {
+    body {
+      -webkit-text-size-adjust: 100%;
+      text-size-adjust: 100%;
+    }
+  }
+
+  /* Improve input focus on mobile */
+  input,
+  textarea,
+  select {
+    font-size: 16px;
+  }
+
+  @media screen and (min-width: 640px) {
+    input,
+    textarea,
+    select {
+      font-size: inherit;
+    }
+  }
+
+  /* Adding cool logo animations */
+  @keyframes gradient-shift {
+    0%,
+    100% {
+      background-position: 0% 50%;
+    }
+    50% {
+      background-position: 100% 50%;
+    }
+  }
+
+  .animate-gradient {
+    background-size: 200% 200%;
+    animation: gradient-shift 3s ease infinite;
+  }
+
+  @keyframes glow-pulse {
+    0%,
+    100% {
+      opacity: 0.3;
+      transform: scale(1);
+    }
+    50% {
+      opacity: 0.5;
+      transform: scale(1.05);
+    }
+  }
+
+  .animate-glow {
+    animation: glow-pulse 2s ease-in-out infinite;
+  }
+
+  /* 艺术字样式 */
+  @keyframes text-shimmer {
+    0% {
+      background-position: -200% center;
+    }
+    100% {
+      background-position: 200% center;
+    }
+  }
+
+  .artistic-text {
+    font-weight: 900;
+    background: linear-gradient(
+      135deg,
+      #667eea 0%,
+      #764ba2 25%,
+      #f093fb 50%,
+      #4facfe 75%,
+      #00f2fe 100%
+    );
+    background-size: 200% auto;
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: text-shimmer 3s linear infinite;
+    text-shadow: 0 0 30px rgba(102, 126, 234, 0.3);
+    letter-spacing: 0.05em;
+    position: relative;
+  }
+
+  .artistic-text::before {
+    content: attr(data-text);
+    position: absolute;
+    left: 0;
+    top: 0;
+    z-index: -1;
+    background: linear-gradient(135deg, #667eea, #764ba2, #f093fb, #4facfe, #00f2fe);
+    background-size: 200% auto;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    filter: blur(10px);
+    opacity: 0.5;
+    animation: text-shimmer 3s linear infinite;
+  }
+
+  .artistic-text-glow {
+    text-shadow: 
+      0 0 10px rgba(102, 126, 234, 0.5),
+      0 0 20px rgba(118, 75, 162, 0.4),
+      0 0 30px rgba(240, 147, 251, 0.3),
+      0 2px 4px rgba(0, 0, 0, 0.1);
+  }
+
+  /* 手机框样式 - 在所有设备上显示 */
+  .phone-frame-wrapper {
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    min-height: 100vh;
+    padding: 1rem;
+    background: none !important;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 9999;
+  }
+  
+  .phone-frame {
+    position: relative;
+    width: 100%;
+    max-width: 420px;
+    height: calc(100vh - 2rem);
+    background: var(--background);
+    border-radius: 2.5rem;
+    box-shadow: 
+      0 0 0 8px rgba(0, 0, 0, 0.1),
+      0 0 0 12px rgba(0, 0, 0, 0.05),
+      0 20px 60px rgba(0, 0, 0, 0.3),
+      0 0 100px rgba(0, 0, 0, 0.2);
+    overflow: hidden;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+  }
+  
+  .phone-notch {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 140px;
+    height: 30px;
+    background: var(--background);
+    border-radius: 0 0 1.5rem 1.5rem;
+    z-index: 10;
+    display: flex;
+    justify-content: center;
+    align-items: flex-end;
+    padding-bottom: 4px;
+  }
+  
+  .phone-speaker {
+    width: 60px;
+    height: 6px;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 3px;
+  }
+  
+  .phone-content {
+    width: 100%;
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    padding-top: 30px;
+    padding-bottom: 20px;
+    min-height: 0;
+  }
+  
+  .phone-content::-webkit-scrollbar {
+    display: none;
+  }
+  
+  .phone-content {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  
+  .phone-home-indicator {
+    position: absolute;
+    bottom: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 134px;
+    height: 5px;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 3px;
+  }
+}
