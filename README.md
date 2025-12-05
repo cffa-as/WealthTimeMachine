@@ -912,19 +912,3 @@ load_dotenv()  # 加载 .env 文件
 - **Qwen3-TTS-Flash-Realtime-2025-11-27** - 语音合成模型（最新快照版），支持方言和多音色，用于理财方案推荐和咨询的语音播报
 
 ---
-
-## 📚 参考文献
-
-1. Markowitz, H. (1952). Portfolio Selection. *Journal of Finance*, 7(1), 77-91.
-2. Sharpe, W. F. (1966). Mutual Fund Performance. *Journal of Business*, 39(1), 119-138.
-3. Fama, E. F., & French, K. R. (1993). Common risk factors in the returns on stocks and bonds. *Journal of Financial Economics*, 33(1), 3-56.
-4. Sortino, F. A., & Price, L. N. (1994). Performance Measurement in a Downside Risk Framework. *Journal of Investing*, 3(3), 59-64.
-5. Jorion, P. (2007). *Value at Risk: The New Benchmark for Managing Financial Risk* (3rd ed.). McGraw-Hill.
-6. Glasserman, P. (2003). *Monte Carlo Methods in Financial Engineering*. Springer.
-7. Artzner, P., et al. (1999). Coherent Measures of Risk. *Mathematical Finance*, 9(3), 203-228.
-
----
-
-## 📄 许可证
-
-本项目为参赛作品，仅供学习和研究使用。
