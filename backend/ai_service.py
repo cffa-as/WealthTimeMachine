@@ -178,3 +178,76 @@ def build_story_prompt(financial_data: Dict, selected_path: Dict, target_amount:
 请开始生成故事："""
     
     return prompt
+
+
+async def generate_response(user_message: str) -> str:
+    """
+    生成AI回复（用于对话）
+    
+    Args:
+        user_message: 用户消息
+    
+    Returns:
+        AI生成的回复文本（300字以内，简单段落式，无markdown）
+    """
+    messages = [
+        {
+            "role": "system",
+            "content": """你是一个专业的理财顾问AI助手，擅长用通俗易懂的语言回答用户的理财问题。
+
+重要要求：
+1. 回复必须控制在300字以内
+2. 使用简单的段落式表达，不要使用markdown格式（不要用**、#、-等符号）
+3. 用温暖、专业、易懂的方式回答，避免过于专业的术语
+4. 多用比喻和例子，让回答更生动
+5. 如果问题比较复杂，选择最重要的2-3个点回答即可"""
+        },
+        {
+            "role": "user",
+            "content": user_message
+        }
+    ]
+    
+    # 使用流式API，但收集完整回复
+    full_response = ""
+    async for chunk in call_deepseek_stream(messages, temperature=0.7):
+        full_response += chunk
+        # 如果已经超过300字，提前停止（留一些余量）
+        if len(full_response) > 350:
+            break
+    
+    # 清理回复：移除markdown格式，限制长度
+    cleaned_response = full_response.strip()
+    
+    # 移除markdown格式
+    import re
+    # 移除 **粗体**
+    cleaned_response = re.sub(r'\*\*(.*?)\*\*', r'\1', cleaned_response)
+    # 移除 *斜体*
+    cleaned_response = re.sub(r'\*(.*?)\*', r'\1', cleaned_response)
+    # 移除 # 标题
+    cleaned_response = re.sub(r'^#+\s*', '', cleaned_response, flags=re.MULTILINE)
+    # 移除 - 列表符号
+    cleaned_response = re.sub(r'^-\s*', '', cleaned_response, flags=re.MULTILINE)
+    # 移除数字列表
+    cleaned_response = re.sub(r'^\d+\.\s*', '', cleaned_response, flags=re.MULTILINE)
+    # 移除多余的空行
+    cleaned_response = re.sub(r'\n{3,}', '\n\n', cleaned_response)
+    
+    # 限制在300字以内
+    if len(cleaned_response) > 300:
+        # 按句号、问号、感叹号分割，保留完整的句子
+        sentences = re.split(r'([。！？])', cleaned_response)
+        result = ""
+        for i in range(0, len(sentences), 2):
+            if i + 1 < len(sentences):
+                sentence = sentences[i] + sentences[i + 1]
+            else:
+                sentence = sentences[i]
+            if len(result + sentence) <= 300:
+                result += sentence
+            else:
+                break
+        cleaned_response = result.strip()
+    
+    return cleaned_response

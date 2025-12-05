@@ -102,6 +102,17 @@ export default function StoryPage() {
                 ...prev,
                 [update.chapterIndex]: true
               }))
+              // 同时更新章节的 imageGenerating 状态，以便组件显示加载状态
+              setChapters(prev => {
+                const newChapters = [...prev]
+                if (newChapters[update.chapterIndex]) {
+                  newChapters[update.chapterIndex] = {
+                    ...newChapters[update.chapterIndex],
+                    imageGenerating: true
+                  }
+                }
+                return newChapters
+              })
             } else if (update.type === "image_complete") {
               // 图片生成完成，更新章节数据
               setChapters(prev => {
@@ -120,7 +131,17 @@ export default function StoryPage() {
                 [update.chapterIndex]: false
               }))
             } else if (update.type === "image_failed") {
-              // 图片生成失败
+              // 图片生成失败，标记为失败状态
+              setChapters(prev => {
+                const newChapters = [...prev]
+                if (newChapters[update.chapterIndex]) {
+                  newChapters[update.chapterIndex] = {
+                    ...newChapters[update.chapterIndex],
+                    imageGenerating: false  // false 表示生成失败，会显示占位图
+                  }
+                }
+                return newChapters
+              })
               setImageGeneratingStatus(prev => ({
                 ...prev,
                 [update.chapterIndex]: false
@@ -160,7 +181,7 @@ export default function StoryPage() {
       <div className="min-h-screen bg-gradient-to-br from-background via-secondary/30 to-accent/20 flex items-center justify-center px-4">
         <div className="text-center max-w-2xl w-full">
           <div className="w-12 h-12 sm:w-16 sm:h-16 border-4 border-primary/30 border-t-primary rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-base sm:text-lg text-muted-foreground mb-4">正在生成你的财务剧本...</p>
+          <p className="text-base sm:text-lg text-muted-foreground mb-4">正在生成你的财务故事...</p>
           {streamingText && (
             <div className="mt-6 p-4 bg-card rounded-lg border border-border max-w-3xl mx-auto">
               <div className="flex items-start gap-3">

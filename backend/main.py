@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -23,10 +23,29 @@ except ImportError as e:
     financial_model = None
 
 try:
-    from tencent_image_service import tencent_image_service
+    from dashscope_image_service import dashscope_image_service
 except ImportError as e:
-    print(f"警告: 无法导入 tencent_image_service: {e}")
-    tencent_image_service = None
+    print(f"警告: 无法导入 dashscope_image_service: {e}")
+    dashscope_image_service = None
+
+try:
+    import cache_service
+except ImportError as e:
+    print(f"警告: 无法导入 cache_service: {e}")
+    cache_service = None
+
+try:
+    from dashscope_tts_service import dashscope_tts_service, get_supported_voices
+except ImportError as e:
+    print(f"警告: 无法导入 dashscope_tts_service: {e}")
+    dashscope_tts_service = None
+    get_supported_voices = None
+
+try:
+    from dashscope_asr_service import dashscope_asr_service
+except ImportError as e:
+    print(f"警告: 无法导入 dashscope_asr_service: {e}")
+    dashscope_asr_service = None
 
 app = FastAPI(title="财务时光机 API", version="1.0.0")
 
@@ -398,6 +417,8 @@ async def recommend_path(financial_data: FinancialData):
     使用金融决策模型推荐理财路径
     
     根据用户的目标、资产、收入，使用专业的金融模型进行风险评估和路径推荐
+    返回三种风险等级（low, medium, high）的推荐方案，让用户选择
+    
     使用现代投资组合理论、风险调整收益等金融计算方法
     """
     try:
@@ -406,20 +427,102 @@ async def recommend_path(financial_data: FinancialData):
         
         print(f"收到推荐请求: goal={financial_data.goal}, asset={financial_data.currentAsset}, income={financial_data.monthlyIncome}")
         
-        # 使用金融决策模型进行推荐
-        recommendation = financial_model.recommend_path(
-            goal=financial_data.goal,
-            current_asset=financial_data.currentAsset,
-            monthly_income=financial_data.monthlyIncome,
-            age=30  # 可以后续从用户输入获取
-        )
+        # 计算目标金额（三种方案使用相同的目标）
+        target_amount = financial_model.calculate_target_amount(financial_data.goal)
         
-        print(f"推荐结果: {recommendation}")
+        # 计算风险承受能力（用于确定主要推荐）
+        risk_assessment = financial_model.calculate_risk_tolerance(
+            financial_data.currentAsset,
+            financial_data.monthlyIncome,
+            financial_data.goal,
+            age=30
+        )
+        recommended_risk = risk_assessment["risk_level"]
+        
+        # 为三种风险等级分别生成推荐
+        recommendations = {}
+        for risk_level in ["low", "medium", "high"]:
+            # 计算该风险等级的最优储蓄方案
+            savings_plan = financial_model.calculate_optimal_savings_rate(
+                financial_data.currentAsset,
+                financial_data.monthlyIncome,
+                target_amount,
+                risk_level
+            )
+            
+            # 获取风险配置
+            profile = financial_model.risk_profiles[risk_level]
+            
+            # 计算各种指标
+            sharpe_ratio = financial_model.calculate_sharpe_ratio(risk_level)
+            sortino_ratio = financial_model.calculate_sortino_ratio(risk_level)
+            var_95 = financial_model.calculate_var(risk_level, confidence_level=0.95)
+            cvar_95 = financial_model.calculate_cvar(risk_level, confidence_level=0.95)
+            
+            # 蒙特卡洛模拟
+            mc_result = financial_model.monte_carlo_simulation(
+            current_asset=financial_data.currentAsset,
+                monthly_save=savings_plan["monthly_save"],
+                expected_return=profile["expected_return"],
+                volatility=profile["volatility"],
+                months=savings_plan["target_months"],
+                simulations=10000
+            )
+            
+            # 动态资产配置优化
+            optimized_allocation = financial_model.optimize_asset_allocation(
+                risk_level=risk_level,
+                current_asset=financial_data.currentAsset,
+                target_amount=target_amount,
+                time_horizon=savings_plan["target_months"]
+            )
+            
+            # 生成推荐理由
+            reason = financial_model._generate_recommendation_reason(
+                risk_assessment,
+                savings_plan,
+                risk_level,
+                target_amount
+            )
+            
+            recommendations[risk_level] = {
+                "recommendedRisk": risk_level,
+                "reason": reason,
+                "monthlySave": round(savings_plan["monthly_save"], 2),
+                "expectedReturn": round(profile["expected_return"] * 100, 1),
+                "targetMonths": savings_plan["target_months"],
+                "targetAmount": round(target_amount, 2),
+                "expectedFinalAmount": round(savings_plan["expected_final_amount"], 2),
+                "sharpeRatio": round(sharpe_ratio, 2),
+                "sortinoRatio": round(sortino_ratio, 2),
+                "var95": round(var_95, 2),
+                "cvar95": round(cvar_95, 2),
+                "volatility": round(profile["volatility"] * 100, 1),
+                "maxDrawdown": round(profile["max_drawdown"] * 100, 1),
+                "assetAllocation": optimized_allocation,
+                "monteCarloSimulation": {
+                    "expectedValue": mc_result["expected_value"],
+                    "median": mc_result["median"],
+                    "confidenceInterval5": mc_result["p5"],
+                    "confidenceInterval95": mc_result["p95"],
+                    "confidenceInterval": mc_result["confidence_interval"]
+                },
+                "riskScore": round(risk_assessment["risk_score"], 2),
+                "riskFactors": {
+                    "asset_coverage": round(risk_assessment["factors"]["asset_coverage"], 2),
+                    "time_pressure": round(risk_assessment["factors"]["time_pressure"], 2),
+                    "age_factor": round(risk_assessment["factors"]["age_factor"], 2),
+                    "income_stability": round(risk_assessment["factors"]["income_stability"], 2)
+                }
+            }
+        
+        print(f"推荐结果: 主要推荐={recommended_risk}, 三种方案已生成")
         
         return {
             "success": True,
-            "recommendation": recommendation,
-            "message": "推荐成功（金融模型计算）"
+            "recommendedRisk": recommended_risk,  # 主要推荐的风险等级
+            "recommendations": recommendations,  # 三种风险等级的完整推荐
+            "message": "推荐成功（金融模型计算，返回三种方案）"
         }
     
     except HTTPException:
@@ -483,9 +586,391 @@ async def generate_story(request: StoryRequest):
         raise HTTPException(status_code=500, detail=f"生成故事失败: {str(e)}")
 
 
-async def _generate_chapter_images_with_updates(chapters: List[Dict]):
-    """为章节生成图片（带进度更新，通过SSE发送）"""
-    if not tencent_image_service or not tencent_image_service.available:
+@app.post("/api/tts/generate")
+async def generate_tts(request: Dict[str, Any]):
+    """
+    生成语音（TTS）
+    
+    使用通义千问3-TTS-Flash-Realtime模型
+    支持多种音色和方言
+    """
+    try:
+        text = request.get("text", "")
+        if not text:
+            raise HTTPException(status_code=400, detail="文本内容不能为空")
+        
+        if not dashscope_tts_service or not dashscope_tts_service.available:
+            raise HTTPException(status_code=503, detail="TTS服务不可用，请检查配置")
+        
+        # 获取音色参数，默认为 Cherry（芊悦）
+        voice = request.get("voice", "Cherry")
+        
+        # 生成语音文件
+        import tempfile
+        import time
+        from pathlib import Path
+        
+        temp_dir = Path(tempfile.gettempdir())
+        output_path = temp_dir / f"tts_{int(time.time())}.pcm"
+        
+        file_path = dashscope_tts_service.generate_speech_to_file(
+            text=text,
+            output_path=str(output_path),
+            voice=voice
+        )
+        
+        if not file_path:
+            raise HTTPException(status_code=500, detail="语音生成失败，请检查TTS服务配置")
+        
+        # 读取文件并转换为base64
+        with open(file_path, 'rb') as f:
+            audio_data = f.read()
+        
+        import base64
+        audio_base64 = base64.b64encode(audio_data).decode('utf-8')
+        
+        # 返回音频数据（base64编码）
+        return {
+            "success": True,
+            "audio_data": audio_base64,
+            "format": "pcm",
+            "sample_rate": 24000,
+            "channels": 1,
+            "bits_per_sample": 16,
+            "voice": voice
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        error_detail = traceback.format_exc()
+        error_msg = str(e)
+        print(f"TTS生成失败错误详情: {error_detail}")
+        
+        # 检查是否是账户权限错误
+        if "账户权限" in error_msg or "Access denied" in error_msg or "account" in error_msg.lower():
+            raise HTTPException(
+                status_code=403,
+                detail="TTS服务账户权限错误。请检查：1) API Key是否正确 2) 账户余额是否充足 3) 账户状态是否正常 4) 是否开通了TTS服务权限"
+            )
+        elif "quota" in error_msg.lower() or "limit" in error_msg.lower() or "配额" in error_msg:
+            raise HTTPException(
+                status_code=429,
+                detail="TTS服务配额不足，请检查账户余额或配额限制"
+            )
+        else:
+            raise HTTPException(status_code=500, detail=f"TTS生成失败: {error_msg}")
+
+
+@app.post("/api/chat")
+async def chat(request: Dict[str, Any]):
+    """
+    文字对话接口（流式输出）
+    使用DeepSeek生成回复，结合推荐的理财产品进行推销
+    """
+    try:
+        message = request.get("message", "")
+        if not message:
+            raise HTTPException(status_code=400, detail="消息内容不能为空")
+        
+        # 获取推荐的理财产品信息（如果有）
+        recommendation_info = request.get("recommendation", None)
+        
+        # 构建系统提示词
+        system_prompt = """你是一个专业的理财顾问AI助手，擅长用通俗易懂的语言回答用户的理财问题。
+
+重要要求：
+1. 回复必须控制在300字以内
+2. 使用简单的段落式表达，不要使用markdown格式（不要用**、#、-等符号）
+3. 用温暖、专业、易懂的方式回答，避免过于专业的术语
+4. 多用比喻和例子，让回答更生动
+5. 如果问题比较复杂，选择最重要的2-3个点回答即可
+6. 如果用户询问理财建议，要结合我们推荐的理财产品来回答，自然地推荐我们的产品
+7. 强调产品的优势和适合性，但不要过于推销，要真诚、专业"""
+        
+        # 如果有推荐信息，添加到系统提示词中
+        if recommendation_info:
+            rec = recommendation_info
+            risk_name = {"low": "稳健型", "medium": "平衡型", "high": "激进型"}.get(rec.get("riskLevel", "medium"), "平衡型")
+            system_prompt += f"""
+
+【推荐的理财产品信息】
+- 方案类型：{risk_name}
+- 预期年化收益率：{rec.get("expectedReturn", 0)}%
+- 每月建议储蓄：{rec.get("monthlySave", 0):,.0f}元
+- 预计达成时间：{rec.get("targetMonths", 0)}个月
+- 风险等级：{rec.get("riskLevel", "medium")}
+
+在回答用户问题时，要自然地结合这个推荐方案，说明为什么这个方案适合用户，强调其优势和特点。"""
+        
+        # 构建消息列表
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": message}
+        ]
+        
+        # 流式生成回复
+        async def generate():
+            full_response = ""
+            async for chunk in ai_service.call_deepseek_stream(messages, temperature=0.7):
+                full_response += chunk
+                # 清理markdown格式
+                cleaned_chunk = chunk
+                cleaned_chunk = cleaned_chunk.replace("**", "").replace("*", "")
+                # 发送流式数据
+                yield f"data: {json.dumps({'type': 'chunk', 'content': cleaned_chunk}, ensure_ascii=False)}\n\n"
+            
+            # 清理完整回复
+            import re
+            cleaned_response = full_response.strip()
+            # 移除markdown格式
+            cleaned_response = re.sub(r'\*\*(.*?)\*\*', r'\1', cleaned_response)
+            cleaned_response = re.sub(r'\*(.*?)\*', r'\1', cleaned_response)
+            cleaned_response = re.sub(r'^#+\s*', '', cleaned_response, flags=re.MULTILINE)
+            cleaned_response = re.sub(r'^-\s*', '', cleaned_response, flags=re.MULTILINE)
+            cleaned_response = re.sub(r'^\d+\.\s*', '', cleaned_response, flags=re.MULTILINE)
+            cleaned_response = re.sub(r'\n{3,}', '\n\n', cleaned_response)
+            
+            # 限制在300字以内
+            if len(cleaned_response) > 300:
+                sentences = re.split(r'([。！？])', cleaned_response)
+                result = ""
+                for i in range(0, len(sentences), 2):
+                    if i + 1 < len(sentences):
+                        sentence = sentences[i] + sentences[i + 1]
+                    else:
+                        sentence = sentences[i]
+                    if len(result + sentence) <= 300:
+                        result += sentence
+                    else:
+                        break
+                cleaned_response = result.strip()
+            
+            # 发送完成事件
+            yield f"data: {json.dumps({'type': 'complete', 'content': cleaned_response}, ensure_ascii=False)}\n\n"
+        
+        return StreamingResponse(
+            generate(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no"
+            }
+        )
+    except Exception as e:
+        print(f"生成回复失败: {e}")
+        import traceback
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"生成回复失败: {str(e)}")
+
+
+@app.get("/api/tts/voices")
+async def get_tts_voices():
+    """
+    获取支持的音色列表
+    """
+    try:
+        if get_supported_voices is None:
+            raise HTTPException(status_code=503, detail="TTS服务不可用，请检查配置")
+        
+        voices = get_supported_voices()
+        return {
+            "success": True,
+            "voices": voices
+        }
+    except Exception as e:
+        print(f"获取音色列表失败: {e}")
+        raise HTTPException(status_code=500, detail=f"获取音色列表失败: {str(e)}")
+
+
+@app.websocket("/api/voice-chat")
+async def voice_chat(websocket: WebSocket):
+    """
+    语音对话 WebSocket 端点
+    支持实时语音识别和语音合成
+    """
+    await websocket.accept()
+    
+    try:
+        # 接收初始配置（音色）
+        config = await websocket.receive_json()
+        voice = config.get("voice", "Cherry")
+        print(f"语音对话开始，使用音色: {voice}")
+        
+        # 创建语音识别实例
+        recognition = None
+        current_sentence = ""
+        
+        def on_text(text: str):
+            """实时文本回调"""
+            nonlocal current_sentence
+            current_sentence = text
+        
+        def on_sentence_end(text: str):
+            """句子结束回调"""
+            nonlocal current_sentence
+            print(f"识别到完整句子: {text}")
+            # 发送识别结果给前端
+            import asyncio
+            asyncio.create_task(websocket.send_json({
+                "type": "text",
+                "text": text,
+                "isUser": True
+            }))
+            current_sentence = ""
+        
+        if dashscope_asr_service and dashscope_asr_service.available:
+            recognition = dashscope_asr_service.create_recognition(
+                on_text=on_text,
+                on_sentence_end=on_sentence_end
+            )
+            if recognition:
+                recognition.start()
+                print("ASR识别已启动")
+        
+        # 发送就绪消息
+        await websocket.send_json({"type": "ready"})
+        
+        # 处理音频数据和消息
+        while True:
+            try:
+                data = await websocket.receive()
+                
+                if "bytes" in data:
+                    # 接收音频数据（PCM格式，16kHz，16bit，单声道）
+                    audio_bytes = data["bytes"]
+                    if recognition:
+                        recognition.send_audio_frame(audio_bytes)
+                
+                elif "text" in data:
+                    # 接收文本消息
+                    message = json.loads(data["text"])
+                    msg_type = message.get("type")
+                    
+                    if msg_type == "text":
+                        # 用户发送文本消息（用于测试或手动输入）
+                        user_text = message.get("text", "")
+                        if user_text:
+                            # 调用AI服务生成回复
+                            try:
+                                ai_response = await ai_service.generate_response(user_text)
+                                # 生成语音
+                                if dashscope_tts_service and dashscope_tts_service.available:
+                                    audio_data = dashscope_tts_service.generate_speech(
+                                        text=ai_response,
+                                        voice=voice
+                                    )
+                                    if audio_data:
+                                        import base64
+                                        audio_base64 = base64.b64encode(audio_data).decode('utf-8')
+                                        await websocket.send_json({
+                                            "type": "audio",
+                                            "audio": audio_base64,
+                                            "text": ai_response
+                                        })
+                                    else:
+                                        await websocket.send_json({
+                                            "type": "text",
+                                            "text": ai_response
+                                        })
+                                else:
+                                    await websocket.send_json({
+                                        "type": "text",
+                                        "text": ai_response
+                                    })
+                            except Exception as e:
+                                print(f"AI回复生成失败: {e}")
+                                await websocket.send_json({
+                                    "type": "error",
+                                    "message": f"生成回复失败: {str(e)}"
+                                })
+                    
+                    elif msg_type == "sentence":
+                        # 识别到的完整句子
+                        sentence = message.get("text", "")
+                        if sentence:
+                            # 调用AI服务生成回复
+                            try:
+                                ai_response = await ai_service.generate_response(sentence)
+                                # 生成语音
+                                if dashscope_tts_service and dashscope_tts_service.available:
+                                    audio_data = dashscope_tts_service.generate_speech(
+                                        text=ai_response,
+                                        voice=voice
+                                    )
+                                    if audio_data:
+                                        import base64
+                                        audio_base64 = base64.b64encode(audio_data).decode('utf-8')
+                                        await websocket.send_json({
+                                            "type": "audio",
+                                            "audio": audio_base64,
+                                            "text": ai_response
+                                        })
+                                    else:
+                                        await websocket.send_json({
+                                            "type": "text",
+                                            "text": ai_response
+                                        })
+                                else:
+                                    await websocket.send_json({
+                                        "type": "text",
+                                        "text": ai_response
+                                    })
+                            except Exception as e:
+                                print(f"AI回复生成失败: {e}")
+                                await websocket.send_json({
+                                    "type": "error",
+                                    "message": f"生成回复失败: {str(e)}"
+                                })
+                    
+                    elif msg_type == "stop":
+                        # 停止识别
+                        if recognition:
+                            recognition.stop()
+                        break
+                
+            except WebSocketDisconnect:
+                print("WebSocket连接断开")
+                break
+            except Exception as e:
+                print(f"处理消息错误: {e}")
+                import traceback
+                print(traceback.format_exc())
+                await websocket.send_json({
+                    "type": "error",
+                    "message": f"处理错误: {str(e)}"
+                })
+    
+    except Exception as e:
+        print(f"语音对话错误: {e}")
+        import traceback
+        print(traceback.format_exc())
+    finally:
+        # 清理资源
+        if recognition:
+            try:
+                recognition.stop()
+            except:
+                pass
+        try:
+            await websocket.close()
+        except:
+            pass
+
+
+async def _generate_chapter_images_with_updates(
+    chapters: List[Dict], 
+    request: StoryRequest = None, 
+    selected_path_dict: Dict = None
+):
+    """
+    为章节生成图片（带进度更新，通过SSE发送）
+    
+    支持缓存：如果图片已缓存，直接使用缓存；否则生成并保存缓存
+    """
+    if not dashscope_image_service or not dashscope_image_service.available:
         return
     
     import asyncio
@@ -494,6 +979,28 @@ async def _generate_chapter_images_with_updates(chapters: List[Dict]):
     # 极速版接口虽然支持并发，但建议串行处理以避免限流
     for i, chapter in enumerate(chapters):
         try:
+            # 检查图片缓存
+            cached_image = None
+            if cache_service and request and selected_path_dict:
+                cached_image = cache_service.check_image_cache(
+                    request.goal,
+                    request.currentAsset,
+                    request.monthlyIncome,
+                    selected_path_dict,
+                    i
+                )
+            
+            if cached_image:
+                # 使用缓存的图片
+                print(f"✓ 使用缓存的图片: 章节 {i+1}")
+                chapter["image"] = cached_image
+                yield {
+                    "type": "image_complete",
+                    "chapterIndex": i,
+                    "imageUrl": cached_image,
+                    "from_cache": True
+                }
+                continue  # 跳过生成，继续下一个章节
             # 从章节标题和内容生成图片描述
             title = chapter.get("title", "")
             content = chapter.get("content", "")
@@ -619,7 +1126,7 @@ async def _generate_chapter_images_with_updates(chapters: List[Dict]):
             
             for retry in range(max_retries):
                 try:
-                    image_url = tencent_image_service.generate_image(
+                    image_url = dashscope_image_service.generate_image(
                         prompt=image_prompt,
                         resolution="1024:1024",
                         rsp_img_type="url"  # 返回URL，有效期1小时
@@ -627,7 +1134,15 @@ async def _generate_chapter_images_with_updates(chapters: List[Dict]):
                     if image_url:
                         break
                 except Exception as e:
-                    if "RequestLimitExceeded" in str(e) or "RateLimit" in str(e):
+                    error_str = str(e)
+                    # 如果是资源不足或配额错误，直接放弃，不再重试
+                    if ("ResourceInsufficient" in error_str or "资源不足" in error_str or 
+                        "quota" in error_str.lower() or "insufficient" in error_str.lower() or
+                        "配额" in error_str or "额度" in error_str):
+                        print(f"图片生成服务资源不足，跳过图片生成: {error_str}")
+                        break  # 直接跳出重试循环
+                    elif ("RequestLimitExceeded" in error_str or "RateLimit" in error_str or
+                          "rate" in error_str.lower() or "限流" in error_str or "限频" in error_str):
                         # 达到限流，等待后重试
                         wait_time = (retry + 1) * 2  # 等待2秒、4秒、6秒
                         print(f"达到限流，等待 {wait_time} 秒后重试...")
@@ -640,6 +1155,17 @@ async def _generate_chapter_images_with_updates(chapters: List[Dict]):
             if image_url:
                 chapter["image"] = image_url
                 print(f"章节 {i+1} 图片生成成功: {image_url}")
+                
+                # 保存图片到缓存
+                if cache_service and request and selected_path_dict:
+                    cache_service.save_image_to_cache(
+                        request.goal,
+                        request.currentAsset,
+                        request.monthlyIncome,
+                        selected_path_dict,
+                        i,
+                        image_url
+                    )
                 
                 # 通知前端图片生成完成
                 yield {
@@ -670,7 +1196,7 @@ async def _generate_chapter_images_with_updates(chapters: List[Dict]):
 
 async def _generate_chapter_images_async(chapters: List[Dict], image_update_callback=None):
     """为章节生成图片（后台任务，使用极速版接口）"""
-    if not tencent_image_service or not tencent_image_service.available:
+    if not dashscope_image_service or not dashscope_image_service.available:
         return
     
     import asyncio
@@ -805,7 +1331,7 @@ async def _generate_chapter_images_async(chapters: List[Dict], image_update_call
             
             for retry in range(max_retries):
                 try:
-                    image_url = tencent_image_service.generate_image(
+                    image_url = dashscope_image_service.generate_image(
                         prompt=image_prompt,
                         resolution="1024:1024",
                         rsp_img_type="url"  # 返回URL，有效期1小时
@@ -813,7 +1339,15 @@ async def _generate_chapter_images_async(chapters: List[Dict], image_update_call
                     if image_url:
                         break
                 except Exception as e:
-                    if "RequestLimitExceeded" in str(e) or "RateLimit" in str(e):
+                    error_str = str(e)
+                    # 如果是资源不足或配额错误，直接放弃，不再重试
+                    if ("ResourceInsufficient" in error_str or "资源不足" in error_str or 
+                        "quota" in error_str.lower() or "insufficient" in error_str.lower() or
+                        "配额" in error_str or "额度" in error_str):
+                        print(f"图片生成服务资源不足，跳过图片生成: {error_str}")
+                        break  # 直接跳出重试循环
+                    elif ("RequestLimitExceeded" in error_str or "RateLimit" in error_str or
+                          "rate" in error_str.lower() or "限流" in error_str or "限频" in error_str):
                         # 达到限流，等待后重试
                         wait_time = (retry + 1) * 2  # 等待2秒、4秒、6秒
                         print(f"达到限流，等待 {wait_time} 秒后重试...")
@@ -867,9 +1401,6 @@ async def generate_story_stream(request: StoryRequest):
     """
     async def generate():
         try:
-            # 计算目标金额
-            target_amount = request.currentAsset + request.selectedPath.monthlySave * request.selectedPath.targetMonths * (1 + request.selectedPath.expectedReturn / 100 / 12)
-            
             # 准备数据
             financial_data_dict = {
                 "goal": request.goal,
@@ -884,6 +1415,70 @@ async def generate_story_stream(request: StoryRequest):
                 "targetMonths": request.selectedPath.targetMonths,
                 "riskLevel": request.selectedPath.riskLevel
             }
+            
+            # 检查缓存
+            cached_story = None
+            if cache_service:
+                cached_story = cache_service.check_story_cache(
+                    request.goal,
+                    request.currentAsset,
+                    request.monthlyIncome,
+                    selected_path_dict
+                )
+            
+            if cached_story:
+                # 使用缓存的故事
+                print("✓ 使用缓存的故事")
+                chapters = cached_story.get("chapters", [])
+                
+                # 发送开始信号
+                yield f"data: {json.dumps({'type': 'start', 'message': '从缓存加载故事...'})}\n\n"
+                
+                # 模拟流式输出（快速返回完整内容）
+                yield f"data: {json.dumps({'type': 'complete', 'chapters': chapters, 'from_cache': True}, ensure_ascii=False)}\n\n"
+                
+                # 检查图片缓存并生成图片更新事件
+                if dashscope_image_service and dashscope_image_service.available:
+                    for i, chapter in enumerate(chapters):
+                        # 检查图片缓存
+                        cached_image = None
+                        if cache_service:
+                            cached_image = cache_service.check_image_cache(
+                                request.goal,
+                                request.currentAsset,
+                                request.monthlyIncome,
+                                selected_path_dict,
+                                i
+                            )
+                        
+                        if cached_image:
+                            # 使用缓存的图片
+                            yield f"data: {json.dumps({
+                                'type': 'image_complete',
+                                'chapterIndex': i,
+                                'imageUrl': cached_image,
+                                'from_cache': True
+                            }, ensure_ascii=False)}\n\n"
+                        else:
+                            # 图片未缓存，需要生成图片
+                            # 使用完整的图片生成逻辑（复用现有的图片生成代码）
+                            # 创建一个只包含当前章节的列表
+                            single_chapter_list = [chapter]
+                            async for update in _generate_chapter_images_with_updates(
+                                single_chapter_list,
+                                request,
+                                selected_path_dict
+                            ):
+                                # 更新章节索引为原始索引
+                                if "chapterIndex" in update:
+                                    update["chapterIndex"] = i
+                                yield f"data: {json.dumps(update, ensure_ascii=False)}\n\n"
+                
+                return  # 缓存命中，直接返回
+            
+            # 缓存未命中，生成新故事
+            # 计算目标金额
+            target_amount = request.currentAsset + request.selectedPath.monthlySave * request.selectedPath.targetMonths * (1 + request.selectedPath.expectedReturn / 100 / 12)
             
             # 构建Prompt
             system_prompt = """你是一个专业的财务故事讲述者。你的任务是生成真实、温暖、有代入感的财务规划故事。
@@ -967,10 +1562,20 @@ async def generate_story_stream(request: StoryRequest):
                 # 发送完整的故事数据
                 yield f"data: {json.dumps({'type': 'complete', 'chapters': chapters}, ensure_ascii=False)}\n\n"
                 
+                # 保存故事到缓存
+                if cache_service:
+                    cache_service.save_story_to_cache(
+                        request.goal,
+                        request.currentAsset,
+                        request.monthlyIncome,
+                        selected_path_dict,
+                        chapters
+                    )
+                
                 # 为每个章节生成图片（异步，不阻塞，通过SSE实时更新）
-                if tencent_image_service and tencent_image_service.available:
+                if dashscope_image_service and dashscope_image_service.available:
                     # 在后台任务中生成图片并发送更新
-                    async for update in _generate_chapter_images_with_updates(chapters):
+                    async for update in _generate_chapter_images_with_updates(chapters, request, selected_path_dict):
                         yield f"data: {json.dumps(update, ensure_ascii=False)}\n\n"
                 
             except json.JSONDecodeError as e:

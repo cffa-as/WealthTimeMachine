@@ -39,31 +39,48 @@ export interface StoryRequest {
 
 export interface RecommendationResponse {
   success: boolean
-  recommendation: {
-    recommendedRisk: "low" | "medium" | "high"
-    reason: string
-    monthlySave: number
-    expectedReturn: number
-    targetMonths: number
-    targetAmount: number
-    expectedFinalAmount: number
-    sharpeRatio: number
-    volatility: number
-    maxDrawdown: number
-    assetAllocation: {
-      bonds: number
-      stocks: number
-      cash: number
-    }
-    riskScore: number
-    riskFactors: {
-      asset_coverage: number
-      time_pressure: number
-      age_factor: number
-      income_stability: number
-    }
+  recommendedRisk: "low" | "medium" | "high"  // 主要推荐的风险等级
+  recommendations: {  // 三种风险等级的完整推荐
+    low: RecommendationDetail
+    medium: RecommendationDetail
+    high: RecommendationDetail
   }
   message?: string
+}
+
+export interface RecommendationDetail {
+  recommendedRisk: "low" | "medium" | "high"
+  reason: string
+  monthlySave: number
+  expectedReturn: number
+  targetMonths: number
+  targetAmount: number
+  expectedFinalAmount: number
+  sharpeRatio: number
+  sortinoRatio: number
+  var95: number
+  cvar95: number
+  volatility: number
+  maxDrawdown: number
+  assetAllocation: {
+    bonds: number
+    stocks: number
+    cash: number
+  }
+  monteCarloSimulation: {
+    expectedValue: number
+    median: number
+    confidenceInterval5: number
+    confidenceInterval95: number
+    confidenceInterval: [number, number]
+  }
+  riskScore: number
+  riskFactors: {
+    asset_coverage: number
+    time_pressure: number
+    age_factor: number
+    income_stability: number
+  }
 }
 
 /**
@@ -272,4 +289,57 @@ export async function generateStoryFromAPI(
     throw error
   }
 }
+
+/**
+ * 获取支持的音色列表
+ */
+export async function getTTSVoices(): Promise<Record<string, { name: string; description: string; dialect: string }>> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/tts/voices`, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+      },
+    })
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`)
+    }
+
+    const data = await response.json()
+    return data.voices || {}
+  } catch (error) {
+    console.error("获取音色列表失败:", error)
+    throw error
+  }
+}
+
+/**
+ * 调用后端API生成语音（TTS）
+ */
+export async function generateTTS(text: string, voice?: string): Promise<string> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/tts/generate`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        text: text,
+        voice: voice || "Cherry", // 默认使用芊悦音色
+      }),
+    })
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`)
+    }
+
+    const data = await response.json()
+    return data.audio_data || data.audioData || ""
+  } catch (error) {
+    console.error("生成语音失败:", error)
+    throw error
+  }
+}
+
 

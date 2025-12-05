@@ -53,9 +53,14 @@ Thumbs.db
 *.temp
 .cache/
 
+# Backend cache directory
+backend/cache/
+
 # API Keys (if any)
 *.key
 *.pem
 
 
 *.pptx
+backend/.env
+PPT.md

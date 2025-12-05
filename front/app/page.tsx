@@ -13,8 +13,8 @@ import { Sparkles, TrendingUp, Target } from "lucide-react"
 export default function HomePage() {
   const router = useRouter()
   const [goal, setGoal] = useState("")
-  const [currentAsset, setCurrentAsset] = useState("")
-  const [monthlyIncome, setMonthlyIncome] = useState("")
+  const [currentAsset, setCurrentAsset] = useState("150000")
+  const [monthlyIncome, setMonthlyIncome] = useState("12000")
   const [isLoading, setIsLoading] = useState(false)
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -26,8 +26,8 @@ export default function HomePage() {
       "financialData",
       JSON.stringify({
         goal,
-        currentAsset: Number.parseFloat(currentAsset) || 0,
-        monthlyIncome: Number.parseFloat(monthlyIncome) || 0,
+        currentAsset: Number.parseFloat(currentAsset) || 150000,
+        monthlyIncome: Number.parseFloat(monthlyIncome) || 12000,
       }),
     )
 
@@ -40,20 +40,7 @@ export default function HomePage() {
   const examples = ["30岁前在深圳买房", "5年内存够孩子的教育基金"]
 
   return (
-    <div 
-      className="min-h-screen relative"
-      style={{
-        backgroundImage: `url('https://images.unsplash.com/photo-1557683316-973673baf926?q=80&w=2128&auto=format&fit=crop')`,
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
-        backgroundRepeat: 'no-repeat',
-        backgroundAttachment: 'fixed',
-      }}
-    >
-      {/* 渐变遮罩层，确保内容可读性并保持美观 */}
-      <div className="absolute inset-0 bg-gradient-to-br from-background/90 via-background/80 to-background/90"></div>
-      <div className="absolute inset-0 bg-gradient-to-t from-background/60 via-transparent to-transparent"></div>
-      
+    <div className="min-h-screen relative bg-background">
       <div className="container mx-auto px-4 sm:px-6 py-4 sm:py-6 md:py-8 max-w-4xl relative z-10">
         {/* Logo */}
         <div className="flex items-center justify-center gap-2 sm:gap-3 mb-3 sm:mb-4">
