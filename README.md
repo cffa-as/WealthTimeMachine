@@ -154,7 +154,7 @@
 
 ### 5. 可行性分析
 
-- **技术可行性**：✅ 基于成熟的FastAPI + Next.js技术栈，AI模型采用DeepSeek和腾讯云混元，技术风险低
+- **技术可行性**：✅ 基于成熟的FastAPI + Next.js技术栈，AI模型采用DeepSeek、Qwen-Image和Qwen3-TTS，技术风险低
 - **实时性**：✅ 推荐计算 < 100ms，故事生成流式输出，图像生成异步处理，满足实时性要求
 - **可扩展性**：✅ 微服务架构设计，支持水平扩展，可应对高并发场景
 - **成本可控**：✅ AI API调用成本可控，本地计算为主，运营成本低
@@ -168,21 +168,39 @@
 ![系统架构图](效果/系统架构图.png)
 
 **架构说明**：
-- **前端层**：Next.js应用，包含首页、规划页、故事页等模块
-- **后端层**：FastAPI服务，包含金融决策模型、AI服务、图像生成服务
-- **通信方式**：HTTP RESTful API + Server-Sent Events (SSE) 流式传输
+- **前端层（React）**：Next.js应用，包含首页（输入目标）、画像页（专属分析）、规划页（普通/关怀/专业三种模式）、故事页（财务剧本）、咨询页（AI问答）、组件库（UI组件）
+- **后端接口层（FastAPI）**：提供理财方案推荐、故事生成、方言理财咨询、金融理财决策四个核心API接口
+- **AI服务层**：
+  - **金融决策模型**：MPT算法、ML增强多因子风险评估、蒙特卡洛模拟
+  - **图像生成（Qwen-Image）**：文生图、异步生成、实时更新
+  - **文本大模型（DeepSeek-chat）**：流式故事生成、个性化内容、JSON解析
+  - **语音合成（Qwen3-TTS-Flash-Realtime-2025-11-27）**：方言支持、多音色、实时流式
+- **通信方式**：前端与后端通过 HTTP RESTful API + Server-Sent Events (SSE) 流式传输；后端内部调用AI服务层
 
 ### 数据流设计
 
 ![数据流图](效果/数据流图.png)
 
-**数据流说明**：
-1. **用户输入**：前端收集财务目标、当前资产、月收入
-2. **推荐计算**：FastAPI后端调用金融决策模型，进行多因子风险评估、MPT资产配置优化、蒙特卡洛模拟预测
-3. **推荐展示**：返回推荐结果到前端，用户选择理财路径
-4. **故事生成**：DeepSeek AI流式生成个性化财务故事（SSE实时输出）
-5. **图像生成**：腾讯云混元异步生成故事配图，实时更新进度
-6. **完整展示**：前端展示完整故事内容和配图
+**数据流说明**（包含三个核心流程）：
+
+**流程1：理财方案推荐**
+1. **用户输入**：前端收集财务目标、当前资产、月收入、风险偏好
+2. **FastAPI接口**：理财方案推荐接口接收请求
+3. **金融决策模型**：调用ML增强多因子模型、MPT资产配置、蒙特卡洛模拟
+4. **Qwen3-TTS**：生成方言语音合成，支持多音色
+5. **推荐结果**：返回用户画像分析、理财路径、语音播报
+
+**流程2：财务故事生成**
+1. **用户选择**：用户选择理财方案
+2. **DeepSeek-chat SSE**：流式生成故事内容，触发图像生成
+3. **Qwen-Image SSE**：异步生成故事配图，实时更新进度
+4. **前端展示**：展示完整故事内容和配图
+
+**流程3：方言理财咨询**
+1. **用户提问**：用户提出理财问题咨询
+2. **DeepSeek-chat SSE**：流式对话响应，提供专业理财建议
+3. **Qwen3-TTS**：方言语音合成，支持多音色
+4. **前端播放**：展示文本内容和方言语音播放
 
 ### 技术架构
 
@@ -424,17 +442,18 @@ FV = PV * (1 + r)^n + PMT * [((1 + r)^n - 1) / r]
 - JSON解析：多级容错机制，支持不完整JSON修复
 - 温度控制：temperature=0.8，平衡创造性和准确性
 
-#### 2.2 腾讯云混元文生图API（极速版）
+#### 2.2 Qwen-Image（文生图模型）
 
 **模型特点**：
-- 同步接口，延迟低（<2s）
-- 支持中文Prompt
-- 分辨率：1024x1024
-- 自动添加水印
+- 支持中文Prompt，理解能力强
+- 异步生成，实时更新进度
+- 高质量图像输出
+- SSE流式进度推送
 
 **应用场景**：
 - 为每个故事章节生成配图
 - 异步生成，实时更新进度
+- 通过SSE实时推送生成状态
 
 **高级Prompt工程**：
 - **智能关键词提取**：从章节内容中自动提取场景、情感、物品关键词
@@ -448,13 +467,33 @@ FV = PV * (1 + r)^n + PMT * [((1 + r)^n - 1) / r]
 - **最大重试次数**：3次重试，确保高可用性
 - **错误处理**：优雅降级，图像生成失败不影响故事展示
 
+#### 2.3 Qwen3-TTS-Flash-Realtime-2025-11-27（语音合成模型）
+
+**模型特点**：
+- **方言支持**：支持多种方言语音合成，满足不同地区用户需求
+- **多音色**：提供多种音色选择，适配不同场景和用户偏好
+- **实时流式**：支持实时流式语音合成，低延迟响应
+- **最新快照版**：使用2025-11-27快照版本，性能优化
+
+**应用场景**：
+- 理财方案推荐的语音播报
+- 方言理财咨询的语音回答
+- 故事内容的语音朗读
+- 智能客服的语音交互
+
+**技术特点**：
+- **流式输出**：实时生成语音，降低等待时间
+- **方言识别**：自动识别用户方言偏好，提供对应方言语音
+- **多音色切换**：支持男声、女声、温柔、专业等多种音色
+- **高质量合成**：自然流畅的语音合成效果，接近真人发音
+
 ---
 
 ## 💻 完整代码结构
 
 ### 项目目录结构
 
-**项目采用前后端分离架构，后端（`backend/`）包含FastAPI主应用、金融决策模型、DeepSeek AI服务和腾讯云图像生成服务，前端（`front/`）基于Next.js App Router，包含首页、规划页、故事页、语音助手页、React组件和工具库，同时项目还包含效果展示图片（`效果/`）和项目说明文档（`README.md`）。**
+**项目采用前后端分离架构，后端（`backend/`）包含FastAPI主应用、金融决策模型、DeepSeek AI服务、Qwen-Image图像生成服务和Qwen3-TTS语音合成服务，前端（`front/`）基于Next.js App Router，包含首页、规划页、故事页、语音助手页、React组件和工具库，同时项目还包含效果展示图片（`效果/`）和项目说明文档（`README.md`）。**
 
 ```
 .
@@ -462,7 +501,8 @@ FV = PV * (1 + r)^n + PMT * [((1 + r)^n - 1) / r]
 │   ├── main.py                # FastAPI主应用（1791行）
 │   ├── financial_model.py     # 金融决策模型（798行）
 │   ├── ai_service.py          # DeepSeek AI服务
-│   ├── tencent_image_service.py  # 腾讯云图像生成服务
+│   ├── dashscope_image_service.py  # Qwen-Image图像生成服务
+│   ├── dashscope_tts_service.py    # Qwen3-TTS语音合成服务
 │   └── requirements.txt        # Python依赖
 │
 ├── front/                      # 前端应用
@@ -531,9 +571,16 @@ FV = PV * (1 + r)^n + PMT * [((1 + r)^n - 1) / r]
 - `call_deepseek_stream()` - DeepSeek流式调用
 - `build_story_prompt()` - Prompt构建
 
-**`backend/tencent_image_service.py`**
-- `TencentImageService` 类
-- `generate_image()` - 同步图像生成
+**`backend/dashscope_image_service.py`**
+- `DashScopeImageService` 类
+- `generate_image()` - Qwen-Image异步图像生成
+- SSE流式进度推送
+
+**`backend/dashscope_tts_service.py`**
+- `DashScopeTTSService` 类
+- `generate_speech()` - Qwen3-TTS语音合成
+- 支持方言和多音色
+- 实时流式语音输出
 
 #### 前端核心文件
 
@@ -800,15 +847,11 @@ npm run dev
 ```bash
 # Linux/Mac
 export DEEPSEEK_API_KEY="your-deepseek-api-key"
-export TENCENT_SECRET_ID="your-tencent-secret-id"
-export TENCENT_SECRET_KEY="your-tencent-secret-key"
-export TENCENT_REGION="ap-shanghai"  # 可选，默认为 ap-shanghai
+export DASHSCOPE_API_KEY="your-dashscope-api-key"  # 用于Qwen-Image和Qwen3-TTS
 
 # Windows PowerShell
 $env:DEEPSEEK_API_KEY="your-deepseek-api-key"
-$env:TENCENT_SECRET_ID="your-tencent-secret-id"
-$env:TENCENT_SECRET_KEY="your-tencent-secret-key"
-$env:TENCENT_REGION="ap-shanghai"
+$env:DASHSCOPE_API_KEY="your-dashscope-api-key"
 ```
 
 #### 方法2：使用 .env 文件（推荐用于开发）
@@ -823,9 +866,7 @@ touch .env  # Linux/Mac
 2. 在 `.env` 文件中添加：
 ```env
 DEEPSEEK_API_KEY=your-deepseek-api-key
-TENCENT_SECRET_ID=your-tencent-secret-id
-TENCENT_SECRET_KEY=your-tencent-secret-key
-TENCENT_REGION=ap-shanghai
+DASHSCOPE_API_KEY=your-dashscope-api-key
 ```
 
 3. 安装 python-dotenv（如果使用 .env 文件）：
@@ -841,7 +882,7 @@ load_dotenv()  # 加载 .env 文件
 
 **获取 API Key：**
 - **DeepSeek API Key**：访问 https://platform.deepseek.com/ 注册并获取
-- **腾讯云密钥**：访问 https://console.cloud.tencent.com/cam/capi 创建密钥
+- **DashScope API Key**：访问 https://dashscope.console.aliyun.com/ 注册并获取（用于Qwen-Image和Qwen3-TTS）
 
 **前端**：
 无需额外配置，默认连接 `http://localhost:8000`
@@ -855,7 +896,7 @@ load_dotenv()  # 加载 .env 文件
 - **Pydantic** 2.5+ - 数据验证
 - **Uvicorn** - ASGI服务器
 - **OpenAI SDK** - DeepSeek API调用
-- **Tencent Cloud SDK** - 腾讯云图像生成
+- **DashScope SDK** - Qwen-Image和Qwen3-TTS API调用
 
 ### 前端
 - **Next.js** 16.0 - React框架
@@ -866,8 +907,9 @@ load_dotenv()  # 加载 .env 文件
 - **Lucide React** - 图标库
 
 ### AI服务
-- **DeepSeek Chat** - 大语言模型（67B参数）
-- **腾讯云混元** - 文生图模型
+- **DeepSeek Chat** - 大语言模型（67B参数），用于流式故事生成和智能客服对话
+- **Qwen-Image** - 文生图模型，用于异步生成故事配图
+- **Qwen3-TTS-Flash-Realtime-2025-11-27** - 语音合成模型（最新快照版），支持方言和多音色，用于理财方案推荐和咨询的语音播报
 
 ---
 
