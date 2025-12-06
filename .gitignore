@@ -60,7 +60,4 @@ backend/cache/
 *.key
 *.pem
 
-
-*.pptx
 backend/.env
-PPT.md
